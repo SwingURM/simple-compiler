@@ -1,0 +1,8 @@
+*.pl0
+*.pl0
+.cache
+.vscode
+miscellaneous
+test
+compile_commands.json
+*.txt
