@@ -24,16 +24,6 @@ struct backpatch {
     int ins1, ins2, ins3, insfalse;
 };
 
-struct dim {
-    int dims[MAX_DIM];
-    int ndim;
-};
-
-struct dimcal {
-    int sid;
-    int depth;
-};
-
 // global
 extern int nLevel;
 

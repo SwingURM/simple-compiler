@@ -1,8 +1,13 @@
 *.pl0
-*.pl0
+*.pl
 .cache
 .vscode
 miscellaneous
 test
 compile_commands.json
 *.txt
+*.gv
+*.pdf
+mybison.tab.c
+mybison.tab.h
+lex.yy.c

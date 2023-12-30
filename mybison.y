@@ -15,8 +15,6 @@ int yydebug = 1;
     char* name;
     int val;
     struct backpatch bp;
-    struct dim dim;
-    struct dimcal dc;
 }
 %type Block ConstDecl VarDecl FuncDecl01 Stmt Exp other_stmt conditional_stmt
 %token SEMICOLON LPAR RPAR COMMA PERIOD LPARM RPARM COLON
@@ -27,12 +25,10 @@ int yydebug = 1;
 %token<op> ADD SUB MUL DIV
 %type<op> RelOp
 %type<bp> if_then
-%type<dim> indexes indexes_lit
 
 %type<cd> ConstDef
 %token<name> IDENT
 %token<val> INTLITERAL
-%type<dc> identt
 %left ADD SUB
 %left MUL DIV
 %precedence NEG
@@ -55,6 +51,7 @@ listConstDef1: listConstDef1 COMMA ConstDef { register_const($3.name, $3.val); }
     ;
 idents: idents COMMA IDENT
     {
+        if (declaringVar) register_var($3, nLevel, &nCurrentLevelAddress);
         if (reading) {
             GenIns(iOPR, 0, 16);
             int sid = find_symbol($3);
@@ -63,77 +60,21 @@ idents: idents COMMA IDENT
     }
     | IDENT
     {
-        if (reading) {
-            GenIns(iOPR, 0, 16);
-            int sid = find_symbol($1);
-            GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
-        }
-    }
-    | IDENT indexes
-    {
-        if (reading) {
-            GenIns(iOPR, 0, 16);
-            int sid = find_symbol($1);
-            GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
-        }
-    }
-    ;
-
-identt: IDENT { 
-        $$.sid = find_symbol($1);
-        $$.depth = 0;
-    }
-    | identt LPARM Exp RPARM
-    {
-        $$ = $1;
-        int size = array_part_size($$.sid, $$.depth);
-        GenIns(iLIT, 0, size);
-        GenIns(iOPR, 0, 4);
-        GenIns(iOPR, 0, 2);
-        $$.depth++;
-    }
-
-idents_lit: idents_lit COMMA IDENT
-    {
-        if (declaringVar) register_var($3, nLevel, &nCurrentLevelAddress);
-    }
-    | IDENT
-    {
         if (declaringVar) register_var($1, nLevel, &nCurrentLevelAddress);
-    }
-    | IDENT indexes_lit
-    {
-        if (declaringVar) register_array($1, nLevel, &nCurrentLevelAddress, $2.ndim, $2.dims);
+        if (reading) {
+            GenIns(iOPR, 0, 16);
+            int sid = find_symbol($1);
+            GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
+        }
     }
     ;
+
 
 listStmt1: Stmt
     | listStmt1 SEMICOLON Stmt
     ;
 listExp1: Exp { if (writing) {GenIns(iOPR, 0, 14);   GenIns(iOPR, 0, 15); } }
     | listExp1 COMMA Exp {  if (writing) {GenIns(iOPR, 0, 14); GenIns(iOPR, 0, 15); }   }
-    ;
-
-indexes: indexes LPARM Exp RPARM
-    {
-        // $$ = $1;
-    }
-    | LPARM Exp RPARM
-    {
-        // $$.ndims = 1;
-    }
-    ;
-
-indexes_lit: indexes LPARM COLON INTLITERAL RPARM
-    {
-        $$ = $1;
-        $$.dims[$$.ndim++] = $4;
-    }
-    | LPARM COLON INTLITERAL RPARM
-    {
-        $$.ndim = 1;
-        $$.dims[0] = $3;
-    }
     ;
 
 program : {symbol_table[0].type = ST_PROC; call_block(0);} Block {ecall_block();}PERIOD {emit_all();}
@@ -264,7 +205,7 @@ ConstDecl : CONST listConstDef1 SEMICOLON
     ;
 ConstDef : IDENT EQ INTLITERAL { $$.name = $1; $$.val = $3; }
     ;
-VarDecl : { declaringVar = true; }VAR idents_lit SEMICOLON {declaringVar = false;}
+VarDecl : { declaringVar = true; }VAR idents SEMICOLON {declaringVar = false;}
     ;
 
 FuncDecl : FuncDecl FuncHead
@@ -350,7 +291,6 @@ Exp : Exp ADD Exp
         if (symbol_table[sid].type == ST_VAR) GenIns(iLOD, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
         else if (symbol_table[sid].type == ST_CONST) GenIns(iLIT, 0, symbol_table[sid].attr.const_attr.val);
     }
-    | IDENT indexes
     | INTLITERAL
     {
         GenIns(iLIT, 0, $1);

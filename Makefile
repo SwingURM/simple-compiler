@@ -18,19 +18,4 @@ interpreter: interpreter.c code.h
 clean:
 	rm mybison.tab.c mybison.tab.h lex.yy.c grammar interpreter mybison.output mybison.gv mybison.pdf ${VMCODE_OUTPUT} ${GRAMMAR_ANALYSIS_OUTPUT}
 
-simple: simple.y simple.l
-	bison -d simple.y
-	flex simple.l
-	gcc lex.yy.c simple.tab.c -o grammar
-	./grammar
-
-swing: grammar swing.pl0
-	./grammar < swing.pl0
-
-1: 1.pl0 lexical
-	./lexical < 1.pl0
-
-2: 2.pl0 a.out
-	./a.out < 2.pl0
-
 .PHONY=clean run
