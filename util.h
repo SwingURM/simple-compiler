@@ -21,9 +21,17 @@ struct backpatch {
 // global
 extern int nLevel;
 
+// Block generate related
+extern int nCurrentLevelAddress, nCurrentLevelFirstInstructAddress, curfunid;
+// var dec
+extern bool declaringVar;
+// write
+extern bool writing;
+// read
+extern bool reading;
+
+
 //
-extern int stack[STACK_SIZE];
-extern int nStack;
 void push(int);
 int pop();
 
@@ -41,14 +49,6 @@ void warn_undef(char *name);
 void warn_redecl(char *name);
 void type_check(int, int);
 
-// Block generate related
-extern int nCurrentLevelAddress, nCurrentLevelFirstInstructAddress, curfunid;
-// var dec
-extern bool declaringVar;
-// write
-extern bool writing;
-// read
-extern bool reading;
 
 
 #endif

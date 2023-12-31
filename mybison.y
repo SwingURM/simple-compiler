@@ -1,9 +1,9 @@
 %{
+#include "ast.h"
 #include "util.h"
 #include "symbol.h"
 #include "codegen.h"
 int yydebug = 1;
-extern int yylineno;
 %}
 
 %start program
@@ -47,7 +47,10 @@ listConstDef1: listConstDef1 COMMA ConstDef
     ;
 idents: idents COMMA IDENT
     {
-        if (declaringVar) register_var($3, nLevel, &nCurrentLevelAddress);
+        if (declaringVar) {
+            register_var($3, nLevel, &nCurrentLevelAddress);
+            add_ast(nID);
+        }
         if (reading) {
             GenIns(iOPR, 0, 16);
             int sid = find_symbol($3);
@@ -58,7 +61,10 @@ idents: idents COMMA IDENT
     }
     | IDENT
     {
-        if (declaringVar) register_var($1, nLevel, &nCurrentLevelAddress);
+        if (declaringVar) {
+            register_var($1, nLevel, &nCurrentLevelAddress);
+            add_ast(nID);
+        }
         if (reading) {
             GenIns(iOPR, 0, 16);
             int sid = find_symbol($1);
@@ -77,11 +83,12 @@ listExp1: Exp { if (writing) {GenIns(iOPR, 0, 14);   GenIns(iOPR, 0, 15); } }
     | listExp1 COMMA Exp {  if (writing) {GenIns(iOPR, 0, 14); GenIns(iOPR, 0, 15); }   }
     ;
 
-program : {symbol_table[0].type = ST_PROC; call_block(0);} Block {ecall_block();}PERIOD {emit_all();}
+program : { init_tree(); symbol_table[0].type = ST_PROC; call_block(0);} Block PERIOD { leave_ast(); }
     ;
 
 Block :
     {
+        enter_ast(nBLOCK);
         assert(symbol_table[curfunid].type == ST_PROC);
         symbol_table[curfunid].addr = nInstructs;
         GenIns(iJMP, 0, 0);
@@ -97,20 +104,26 @@ Block :
         GenIns(iINT, 0, nCurrentLevelAddress);
     }
     Stmt
-    {   GenIns(iOPR, 0, 0); }
+    {
+        GenIns(iOPR, 0, 0);
+        leave_ast(nBLOCK);
+        ecall_block();
+    }
     ;
 
-if_then: IF LPAR CONDITION RPAR
+if_then:
+    IF {enter_ast(nIF_STMT);}
+    LPAR CONDITION RPAR
     {   $$.insfalse = GenIns(iJPC, 0, 0);   }
-    | IF LPAR CONDITION error
-    { yyerror("Missing right parenthesis"); }
+    /* | IF LPAR CONDITION error
+    { yyerror("Missing right parenthesis"); } */
     ;
-Stmt: conditional_stmt
+Stmt:conditional_stmt
     |
     other_stmt
     ;
 
-conditional_stmt: FOR LPAR Stmt SEMICOLON
+conditional_stmt:FOR LPAR Stmt SEMICOLON
     <bp>{
         $$.ins2 = nInstructs;
     }
@@ -133,8 +146,9 @@ conditional_stmt: FOR LPAR Stmt SEMICOLON
         GenIns(iJMP, 0, $9.ins1); // goto update
         assert(instructs[$7.insfalse].iid == iJPC);
         backpatch($7.insfalse);
+        add_ast(nFOR_STMT);
     }
-    |if_then Stmt ELSE
+    | if_then Stmt ELSE
     <bp>{
         $$.ins1 = GenIns(iJMP, 0, 0);
         assert(instructs[$1.insfalse].iid == iJPC);
@@ -144,17 +158,19 @@ conditional_stmt: FOR LPAR Stmt SEMICOLON
     {
         assert(instructs[$4.ins1].iid == iJMP);
         backpatch($4.ins1);
+        leave_ast();
     }
     |if_then Stmt
     {
         assert(instructs[$1.insfalse].iid == iJPC);
         backpatch($1.insfalse);
-
+        leave_ast();
     } %prec LOWER_THAN_ELSE
     /* | IF CONDITION error Stmt { yyerror("Missing then"); } */
     |
     <bp>{
         $$.ins1 = nInstructs;
+        enter_ast(nWHILE_STMT);
     }
     WHILE CONDITION DO
     <bp>{
@@ -165,6 +181,7 @@ conditional_stmt: FOR LPAR Stmt SEMICOLON
         GenIns(iJMP, 0, $1.ins1);
         assert(instructs[$5.insfalse].iid == iJPC);
         backpatch($5.insfalse);
+        leave_ast();
     }
     ;
 other_stmt:IDENT ASSIGN Exp
@@ -173,6 +190,7 @@ other_stmt:IDENT ASSIGN Exp
         if (sid == -1) warn_undef($1);
         type_check(sid, ST_VAR);
         GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
+        add_ast(nASSIGN_STMT);
     }
     | CALL IDENT
     {
@@ -180,45 +198,52 @@ other_stmt:IDENT ASSIGN Exp
         if (sid == -1) warn_undef($2);
         type_check(sid, ST_PROC);
         GenIns(iCAL, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
+        add_ast(nCALL_STMT);
     }
     | READ LPAR
     {   reading = true; }
     idents
-    {   reading = false;    }
+    {   reading = false;  add_ast(nREAD_STMT);   }
     RPAR
     | WRITE LPAR
     {   writing = true; }
     listExp1
-    {   writing = false;}
+    {   writing = false; add_ast(nWRITE_STMT);}
     RPAR
     | BBEGIN listStmt1 END
     |
     ;
 
-ConstDecl : CONST listConstDef1 SEMICOLON
+ConstDecl : { enter_ast(nCONST_DECL); } CONST listConstDef1 SEMICOLON { leave_ast();}
     ;
-ConstDef : IDENT EQ INTLITERAL { register_const($1, $3); }
+ConstDef : IDENT EQ INTLITERAL
+    { register_const($1, $3);
+      add_ast(nID); }
     ;
-VarDecl : { declaringVar = true; }VAR idents SEMICOLON {declaringVar = false;}
+VarDecl : { declaringVar = true; enter_ast(nVAR_DECL); }
+    VAR idents SEMICOLON
+    { declaringVar = false; leave_ast();}
     ;
 
 FuncDecl : FuncDecl FuncHead
-    {   call_block(nLevel + 1); }
+    {   call_block(nLevel + 1);
+        enter_ast(nPROC_DECL); }
     Block
-    {   ecall_block();  }
     SEMICOLON
+    {   leave_ast();    }
     | FuncHead
-    {   call_block(nLevel + 1); }
+    {   call_block(nLevel + 1);
+        enter_ast(nPROC_DECL); }
     Block
-    {   ecall_block();  }
     SEMICOLON
+    {   leave_ast();  }
     ;
 FuncHead : PROCEDURE IDENT
     {   register_proc($2, nLevel); }
     SEMICOLON
     ;
 
-CONDITION : Exp RelOp Exp
+CONDITION :Exp RelOp Exp
     {
         switch($2) {
             case REL_EQ:
@@ -280,5 +305,7 @@ RelOp : EQ { $$ = REL_EQ; }
 int main(void)
 {
     yyparse();
+
+    print_ast();
     return 0;
 }

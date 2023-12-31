@@ -37,7 +37,6 @@ extern struct tablestruct {
   int nLevel;
   int addr;
 } symbol_table[MAX_NUMBER_SYMBOLS];
-extern int nSymbol;
 
 extern int nSymbol;
 void register_symbol(struct tablestruct *, int *);

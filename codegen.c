@@ -1,5 +1,4 @@
 #include "codegen.h"
-#include "symbol.h"
 
 struct INSTRUCT instructs[MAX_NUMBER_INSTRUCTS];
 int nInstructs = 0;
