@@ -305,7 +305,7 @@ RelOp : EQ { $$ = REL_EQ; }
 int main(void)
 {
     yyparse();
-
+    emit_all();
     print_ast();
     return 0;
 }

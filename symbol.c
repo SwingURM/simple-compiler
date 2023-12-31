@@ -20,8 +20,10 @@ void register_var(char* name, int level, int* addr) {
   if (sid != -1 && symbol_table[sid].type != ST_VAR) {
     warn_redecl(name);
   }
-  if (sid != -1)
+  if (sid != -1) {
     fprintf(stderr, "Warning: %s has been declared before\n", name);
+    return;
+  }
   struct tablestruct* temp = &symbol_table[nSymbol];
   strcpy(temp->name, name);
   temp->type = ST_VAR;
