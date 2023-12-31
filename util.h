@@ -14,12 +14,6 @@
 
 enum REL_OP { REL_EQ, REL_NEQ, REL_LT, REL_GT, REL_LTE, REL_GTE };
 
-struct constDef {
-  char* name;
-  int val;
-};
-extern struct VarDecs* varDecHead;
-
 struct backpatch {
     int ins1, ins2, ins3, insfalse;
 };
@@ -39,6 +33,14 @@ void ecall_block();
 void call_stmt(int);
 void ecall_stmt();
 
+//
+extern int yylineno;
+int yylex(void);
+void yyerror(const char*, ...);
+void warn_undef(char *name);
+void warn_redecl(char *name);
+void type_check(int, int);
+
 // Block generate related
 extern int nCurrentLevelAddress, nCurrentLevelFirstInstructAddress, curfunid;
 // var dec
@@ -47,5 +49,6 @@ extern bool declaringVar;
 extern bool writing;
 // read
 extern bool reading;
+
 
 #endif

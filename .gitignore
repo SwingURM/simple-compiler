@@ -11,3 +11,5 @@ compile_commands.json
 mybison.tab.c
 mybison.tab.h
 lex.yy.c
+grammar
+interpreter

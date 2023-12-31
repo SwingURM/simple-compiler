@@ -29,10 +29,10 @@ struct INSTRUCT* parse_line(FILE* fp) {
 void print_cur_ins(struct INSTRUCT* ins) {
   printf("%s %d %d\n", id2name[ins->iid], ins->nLevel, ins->op);
 }
-void print_stack(int* Stack, int nStackTop, int nStackBase) {
-    printf("nStackTop: %d, nStackBase: %d\n", nStackTop, nStackBase);
+void print_stack(int* Stack, int rsp, int rbp) {
+  printf("rsp: %d, rbp: %d\n", rsp, rbp);
   printf("Stack: ");
-  for (int i = nStackBase; i < nStackTop; i++) {
+  for (int i = rbp; i < rsp; i++) {
     printf("%d ", Stack[i]);
   }
   printf("\n");
@@ -40,14 +40,10 @@ void print_stack(int* Stack, int nStackTop, int nStackBase) {
 
 //  解释程序
 void Interpreter() {
-  //
   int pc = 0;
-  int nStackBase = 0;
-  int nStackTop = 0;
   int Stack[STACK_SIZE];  //  数据存储器,数据栈
-
-  int rsp = 0;  //  栈顶指针
-  int rbp = 0;  //  栈底指针
+  int rsp = 0;            //  栈顶指针
+  int rbp = 0;            //  调用链？
 
   Stack[0] = Stack[1] = Stack[2] = 0;
 
@@ -56,96 +52,94 @@ void Interpreter() {
     ins = &instructs[pc];
     pc++;
     // print_cur_ins(ins);
-    // print_stack(Stack, nStackTop, nStackBase);
+    // print_stack(Stack, rsp, rbp);
     switch (ins->iid) {
       case iJMP:
         pc = ins->op;
         break;
       case iJPC:
-        if (Stack[--nStackTop] == 0) pc = ins->op;
+        if (Stack[--rsp] == 0) pc = ins->op;
         break;
       case iLIT:
-        Stack[nStackTop++] = ins->op;
+        Stack[rsp++] = ins->op;
         break;
       case iLOD:
-        Stack[nStackTop++] =
-            Stack[GetBase(ins->nLevel, Stack, nStackBase) + ins->op];
+        Stack[rsp++] = Stack[GetBase(ins->nLevel, Stack, rbp) + ins->op];
         break;
       case iSTO:
-        Stack[GetBase(ins->nLevel, Stack, nStackBase) + ins->op] =
-            Stack[--nStackTop];
+        Stack[GetBase(ins->nLevel, Stack, rbp) + ins->op] = Stack[--rsp];
         break;
       case iCAL:
-        Stack[nStackTop] = GetBase(ins->nLevel, Stack, nStackBase);
-        Stack[nStackTop + 1] = nStackBase;
-        Stack[nStackTop + 2] = pc;
-        nStackBase = nStackTop;
+        Stack[rsp] = GetBase(ins->nLevel, Stack, rbp);
+        Stack[rsp + 1] = rbp;
+        Stack[rsp + 2] = pc;
+        rbp = rsp;
         pc = ins->op;
         break;
       case iINT:
-        nStackTop += ins->op;
+        rsp += ins->op;
         break;
       case iOPR:
         switch (ins->op) {
           case 0:
-            nStackTop = nStackBase;
-            pc = Stack[nStackTop + 2];
-            nStackBase = Stack[nStackTop + 1];
+            rsp = rbp;
+            pc = Stack[rsp + 2];
+            rbp = Stack[rsp + 1];
             break;
           case 1:
-            Stack[nStackTop - 1] = -Stack[nStackTop - 1];
+            Stack[rsp - 1] = -Stack[rsp - 1];
             break;
           case 2:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] + Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] + Stack[rsp];
             break;
           case 3:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] - Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] - Stack[rsp];
             break;
           case 4:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] * Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] * Stack[rsp];
             break;
           case 5:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] / Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] / Stack[rsp];
             break;
           case 6:
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] % 2;
+            Stack[rsp - 1] = Stack[rsp - 1] % 2;
             break;
           case 8:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] == Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] == Stack[rsp];
             break;
           case 9:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] != Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] != Stack[rsp];
             break;
           case 10:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] < Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] < Stack[rsp];
             break;
           case 11:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] >= Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] >= Stack[rsp];
             break;
           case 12:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] > Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] > Stack[rsp];
             break;
           case 13:
-            nStackTop--;
-            Stack[nStackTop - 1] = Stack[nStackTop - 1] <= Stack[nStackTop];
+            rsp--;
+            Stack[rsp - 1] = Stack[rsp - 1] <= Stack[rsp];
             break;
           case 14:
-            printf("%d", Stack[--nStackTop]);
+            printf("%d", Stack[--rsp]);
             break;
           case 15:
             printf("\n");
             break;
           case 16:
-            scanf("%d", &Stack[nStackTop++]);
+            scanf("%d", &Stack[rsp++]);
             break;
           default:
             assert(0);
@@ -154,13 +148,11 @@ void Interpreter() {
       default:
         assert(0);
     }
-    // print_stack(Stack, nStackTop, nStackBase);
+    // print_stack(Stack, rsp, rbp);
   } while (pc != 0);
 }
 
 int main(int argc, char** argv) {
-  // read instructs from file output.txt
-
   // read the first arg
   if (argc != 2) {
     printf("Usage: ./interpreter <filename>\n");

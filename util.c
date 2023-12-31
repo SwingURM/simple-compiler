@@ -35,3 +35,31 @@ void call_stmt(int level) {
 void ecall_stmt() {
   nLevel = pop();
 }
+// a function create a customized error message
+void yyerror(const char *s, ...) {
+    va_list ap;
+    va_start(ap, s);
+    fprintf(stderr, "Error: ");
+    vfprintf(stderr, s, ap);
+    va_end(ap);
+    fprintf(stderr, " in line %d\n", yylineno);
+    exit(1);
+}
+void warn_undef(char *name) {
+  yyerror("%s is undefined", name);
+}
+
+void warn_redecl(char *name) {
+  yyerror("%s has been declared before", name);
+}
+
+void warn_typemismatch(char *name, int type, int expected_type) {
+    yyerror("type mismatch on %s, expected %s, got %s", name, type2str(expected_type), type2str(type));
+}
+
+void type_check(int sid, int expected_type) {
+  if (symbol_table[sid].type != expected_type) {
+    warn_typemismatch(symbol_table[sid].name, symbol_table[sid].type, expected_type);
+  }
+}
+

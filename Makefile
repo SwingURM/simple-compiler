@@ -3,7 +3,7 @@ GRAMMAR_ANALYSIS_OUTPUT = grammar_analysis.txt
 PLCODE = simple.pl
 
 grammar: mybison.y test.l util.c codegen.c codegen.h util.h symbol.c symbol.h code.h
-	bison -d mybison.y -Wcex --graph
+	bison -d mybison.y --graph
 	dot -Tpdf mybison.gv -o mybison.pdf
 	flex test.l
 	gcc symbol.c codegen.c util.c mybison.tab.c lex.yy.c -o grammar

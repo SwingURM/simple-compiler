@@ -24,7 +24,6 @@ procedure { return PROCEDURE; }
 begin { return BBEGIN; }
 end { return END; }
 if { return IF; }
-then { return THEN; }
 call { return CALL; }
 while { return WHILE; }
 do { return DO; }
@@ -44,9 +43,7 @@ for {return FOR;}
 "<" { return LT;}
 ">=" {return GTE;}
 "<=" {return LTE;}
-\[ { return LPARM; }
-\] { return RPARM; }
-: { return COLON; }
 {VAR} { yylval.name = strdup(yytext); return IDENT; }
-[ \t\n\r]+ {}
+[ \t\r]+ {}
+\n { yylineno++;}
 %%

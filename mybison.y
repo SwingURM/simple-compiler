@@ -1,24 +1,21 @@
 %{
-int yylex(void);
-void yyerror(const char *s);
 #include "util.h"
 #include "symbol.h"
 #include "codegen.h"
 int yydebug = 1;
+extern int yylineno;
 %}
 
 %start program
 %define parse.trace
 %union {
-    struct constDef cd;
     char op;
     char* name;
     int val;
     struct backpatch bp;
 }
-%type Block ConstDecl VarDecl FuncDecl01 Stmt Exp other_stmt conditional_stmt
-%token SEMICOLON LPAR RPAR COMMA PERIOD LPARM RPARM COLON
-%token CONST VAR IF THEN END BBEGIN CALL DO READ WRITE PROCEDURE WHILE ELSE FOR
+%token SEMICOLON LPAR RPAR COMMA PERIOD
+%token CONST VAR IF END BBEGIN CALL DO READ WRITE PROCEDURE WHILE ELSE FOR
 %token ODD
 %token<op> EQ LTE GTE GT LT NEQ
 %token ASSIGN
@@ -26,7 +23,6 @@ int yydebug = 1;
 %type<op> RelOp
 %type<bp> if_then
 
-%type<cd> ConstDef
 %token<name> IDENT
 %token<val> INTLITERAL
 %left ADD SUB
@@ -46,8 +42,8 @@ FuncDecl01:
     | FuncDecl
     ;
 
-listConstDef1: listConstDef1 COMMA ConstDef { register_const($3.name, $3.val); }
-    | ConstDef { register_const($1.name, $1.val); }
+listConstDef1: listConstDef1 COMMA ConstDef
+    | ConstDef
     ;
 idents: idents COMMA IDENT
     {
@@ -55,6 +51,8 @@ idents: idents COMMA IDENT
         if (reading) {
             GenIns(iOPR, 0, 16);
             int sid = find_symbol($3);
+            if (sid == -1) warn_undef($3);
+            type_check(sid, ST_VAR);
             GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
         }
     }
@@ -64,6 +62,8 @@ idents: idents COMMA IDENT
         if (reading) {
             GenIns(iOPR, 0, 16);
             int sid = find_symbol($1);
+            if (sid == -1) warn_undef($1);
+            type_check(sid, ST_VAR);
             GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
         }
     }
@@ -97,15 +97,13 @@ Block :
         GenIns(iINT, 0, nCurrentLevelAddress);
     }
     Stmt
-    {
-        GenIns(iOPR, 0, 0);
-    }
+    {   GenIns(iOPR, 0, 0); }
     ;
 
-if_then: IF CONDITION THEN
-    {
-        $$.insfalse = GenIns(iJPC, 0, 0);
-    }
+if_then: IF LPAR CONDITION RPAR
+    {   $$.insfalse = GenIns(iJPC, 0, 0);   }
+    | IF LPAR CONDITION error
+    { yyerror("Missing right parenthesis"); }
     ;
 Stmt: conditional_stmt
     |
@@ -172,30 +170,26 @@ conditional_stmt: FOR LPAR Stmt SEMICOLON
 other_stmt:IDENT ASSIGN Exp
     {
         int sid = find_symbol($1);
+        if (sid == -1) warn_undef($1);
+        type_check(sid, ST_VAR);
         GenIns(iSTO, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
     }
     | CALL IDENT
     {
         int sid = find_symbol($2);
+        if (sid == -1) warn_undef($2);
+        type_check(sid, ST_PROC);
         GenIns(iCAL, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
     }
     | READ LPAR
-    {
-        reading = true;
-    }
+    {   reading = true; }
     idents
-    {
-        reading = false;
-    }
+    {   reading = false;    }
     RPAR
     | WRITE LPAR
-    {
-        writing = true;
-    }
+    {   writing = true; }
     listExp1
-    {
-        writing = false;
-    }
+    {   writing = false;}
     RPAR
     | BBEGIN listStmt1 END
     |
@@ -203,34 +197,24 @@ other_stmt:IDENT ASSIGN Exp
 
 ConstDecl : CONST listConstDef1 SEMICOLON
     ;
-ConstDef : IDENT EQ INTLITERAL { $$.name = $1; $$.val = $3; }
+ConstDef : IDENT EQ INTLITERAL { register_const($1, $3); }
     ;
 VarDecl : { declaringVar = true; }VAR idents SEMICOLON {declaringVar = false;}
     ;
 
 FuncDecl : FuncDecl FuncHead
-    {
-        call_block(nLevel + 1);
-    }
+    {   call_block(nLevel + 1); }
     Block
-    {
-        ecall_block();
-    }
+    {   ecall_block();  }
     SEMICOLON
     | FuncHead
-    {
-        call_block(nLevel + 1);
-    }
+    {   call_block(nLevel + 1); }
     Block
-    {
-        ecall_block();
-    }
+    {   ecall_block();  }
     SEMICOLON
     ;
 FuncHead : PROCEDURE IDENT
-    {
-        register_proc($2, nLevel);
-    }
+    {   register_proc($2, nLevel); }
     SEMICOLON
     ;
 
@@ -258,43 +242,30 @@ CONDITION : Exp RelOp Exp
         }
     }
     | ODD Exp
-    {
-        GenIns(iOPR, 0, 6);
-    }
+    {   GenIns(iOPR, 0, 6); }
     ;
 
 Exp : Exp ADD Exp
-    {
-        GenIns(iOPR, 0, 2);
-    }
+    {   GenIns(iOPR, 0, 2); }
     | Exp SUB Exp
-    {
-        GenIns(iOPR, 0, 3);
-    }
+    {   GenIns(iOPR, 0, 3); }
     | Exp MUL Exp
-    {
-        GenIns(iOPR, 0, 4);
-    }
+    {   GenIns(iOPR, 0, 4); }
     | Exp DIV Exp
-    {
-        GenIns(iOPR, 0, 5);
-    }
+    {   GenIns(iOPR, 0, 5); }
     | SUB Exp %prec NEG
-    {
-        GenIns(iOPR, 0, 1);
-    }
+    {   GenIns(iOPR, 0, 1); }
     | LPAR Exp RPAR
     | LPAR Exp error { yyerror("Missing right parenthesis"); }
     | IDENT
     {
         int sid = find_symbol($1);
+        if (sid == -1) warn_undef($1);
         if (symbol_table[sid].type == ST_VAR) GenIns(iLOD, nLevel - symbol_table[sid].nLevel, symbol_table[sid].addr);
         else if (symbol_table[sid].type == ST_CONST) GenIns(iLIT, 0, symbol_table[sid].attr.const_attr.val);
     }
     | INTLITERAL
-    {
-        GenIns(iLIT, 0, $1);
-    }
+    {   GenIns(iLIT, 0, $1);    }
     ;
 
 RelOp : EQ { $$ = REL_EQ; }
@@ -305,11 +276,6 @@ RelOp : EQ { $$ = REL_EQ; }
     | GT { $$ = REL_GT; }
     ;
 %%
-
-void yyerror(const char *s)
-{
-    fprintf(stderr, "%s\n", s);
-}
 
 int main(void)
 {
